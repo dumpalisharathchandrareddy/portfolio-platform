@@ -1,0 +1,142 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Profile {
+  id            String   @id @default(cuid())
+  fullName      String
+  headline      String
+  summary       String
+  location      String?
+  email         String?
+  githubUrl     String?
+  linkedinUrl   String?
+  websiteUrl    String?
+  profileImage  String?
+  resumeUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  title       String
+  slug        String        @unique
+  shortDesc   String
+  caseStudyMd String
+  tags        String[]      @default([])
+  techStack   String[]      @default([])
+  featured    Boolean       @default(false)
+  status      PublishStatus @default(DRAFT)
+  coverImage  String?
+  liveUrl     String?
+  repoUrl     String?
+  sortOrder   Int           @default(0)
+
+  images      ProjectImage[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, featured])
+  @@index([sortOrder])
+  @@index([updatedAt])
+}
+
+model ProjectImage {
+  id        String   @id @default(cuid())
+  projectId String
+  url       String
+  alt       String?
+  sortOrder Int      @default(0)
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+}
+
+model SkillCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+
+  skills    Skill[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Skill {
+  id          String        @id @default(cuid())
+  name        String
+  proficiency Int           @default(5)
+  sortOrder   Int           @default(0)
+
+  categoryId  String
+  category    SkillCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime      @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@index([categoryId])
+  @@unique([categoryId, name])
+}
+
+model Experience {
+  id        String   @id @default(cuid())
+  company   String
+  role      String
+  location  String?
+  startDate DateTime
+  endDate   DateTime?
+  isCurrent Boolean  @default(false)
+  bullets   String[] @default([])
+  tech      String[] @default([])
+  sortOrder Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder])
+  @@index([startDate])
+}
+
+model Certification {
+  id            String   @id @default(cuid())
+  title         String
+  issuer        String
+  issueDate     DateTime
+  expiration    DateTime?
+  credentialId  String?
+  credentialUrl String?
+  sortOrder     Int      @default(0)
+
+  @@index([sortOrder])
+  @@index([issueDate])
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([email])
+}

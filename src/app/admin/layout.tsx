@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AdminUserMenu from "@/components/admin/admin-user-menu";
 
 const nav = [
   { href: "/admin", label: "Dashboard" },
@@ -12,32 +13,33 @@ const nav = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="grid gap-6 md:grid-cols-[240px_1fr]">
-          <aside className="rounded-2xl border p-4 h-fit sticky top-6">
-            <div className="mb-4">
-              <div className="text-sm font-semibold">Admin</div>
-              <div className="text-xs text-muted-foreground">
-                Portfolio CMS
-              </div>
-            </div>
-
-            <nav className="space-y-1">
-              {nav.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="block rounded-lg px-3 py-2 text-sm hover:bg-muted/40 transition"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </aside>
-
-          <main className="rounded-2xl border p-6">{children}</main>
+    <div className="min-h-screen">
+      <div className="border-b bg-background">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+              ← Back to site
+            </Link>
+            <span className="text-sm font-medium">Admin</span>
+          </div>
+          <AdminUserMenu />
         </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-8 grid gap-8 md:grid-cols-[220px_1fr]">
+        <aside className="space-y-2">
+          {nav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="block rounded-lg border px-3 py-2 text-sm hover:bg-muted/30 transition"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </aside>
+
+        <section>{children}</section>
       </div>
     </div>
   );

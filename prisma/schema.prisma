@@ -140,3 +140,4 @@ model ContactSubmission {
   @@index([createdAt])
   @@index([email])
 }
+

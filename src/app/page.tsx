@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AvatarFallback } from "@/components/ui/avatar-fallback";
 
 async function getProfile() {
   const res = await fetch("http://localhost:3000/api/public/profile", {
@@ -31,6 +32,20 @@ export default async function HomePage() {
 
       {/* HERO */}
       <section className="space-y-4">
+        {profile.profileImage && (
+  <img
+    src={profile.profileImage}
+    alt={profile.fullName}
+    className="w-32 h-32 rounded-full object-cover border"
+  />
+)}
+
+<AvatarFallback
+  name={profile.fullName}
+  src={profile.profileImage ?? null}
+  size={96}
+/>
+
         <h1 className="text-4xl font-bold">
           {profile?.fullName || "Your Name"}
         </h1>

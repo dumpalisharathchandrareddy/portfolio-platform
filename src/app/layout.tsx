@@ -5,7 +5,10 @@ import "./globals.css";
 import Providers from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import SiteHeader from "@/components/site-header";
-import SiteFooter from "@/components/site-footer";
+import Footer from "@/components/footer"; // ✅ dynamic footer
+
+import { prisma } from "@/lib/prisma";
+import { getBaseUrl } from "@/lib/site-url";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,17 +20,40 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Sharath Chandra Reddy Dumpali — Portfolio",
-  description: "Full-Stack Software Engineer | Next.js, PostgreSQL, Cloud",
-  openGraph: {
-    title: "Sharath Chandra Reddy Dumpali — Portfolio",
-    description: "DB-driven portfolio CMS built with Next.js + PostgreSQL.",
-    url: "http://localhost:3000",
-    siteName: "Sharath Portfolio",
-    type: "website",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const profile = await prisma.profile.findFirst();
+
+  const baseUrl = getBaseUrl();
+
+  const fullName = profile?.fullName?.trim() || "Portfolio";
+  const headline =
+    profile?.headline?.trim() || "Full-Stack Software Engineer";
+
+  const description =
+    profile?.summary?.trim() ||
+    `${headline} | Next.js, PostgreSQL, Cloud`;
+
+  return {
+    title: `${fullName} — Portfolio`,
+    description,
+
+    openGraph: {
+      title: `${fullName} — Portfolio`,
+      description,
+      url: baseUrl,
+      siteName: `${fullName} Portfolio`,
+      type: "website",
+      images: profile?.profileImage ? [profile.profileImage] : [],
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title: `${fullName} — Portfolio`,
+      description,
+      images: profile?.profileImage ? [profile.profileImage] : [],
+    },
+  };
+}
 
 export default function RootLayout({
   children,
@@ -36,14 +62,27 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <Providers>
+
+          {/* Header */}
           <SiteHeader />
-          <div className="min-h-[calc(100vh-56px)]">{children}</div>
-          <SiteFooter />
+
+          {/* Page Content */}
+          <main className="min-h-[calc(100vh-56px)]">
+            {children}
+          </main>
+
+          {/* Dynamic DB-driven Footer */}
+          <Footer />
+
         </Providers>
 
+        {/* Toast notifications */}
         <Toaster richColors position="top-right" />
+
       </body>
     </html>
   );

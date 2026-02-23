@@ -11,6 +11,7 @@ type Project = {
   techStack: string[];
   featured: boolean;
   status: "DRAFT" | "PUBLISHED";
+  coverImage?: string | null; 
 };
 
 export default function ProjectsPage() {
@@ -103,33 +104,47 @@ export default function ProjectsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((p) => (
             <a
-              key={p.id}
-              href={`/projects/${p.slug}`}
-              className="rounded-xl border p-6 hover:bg-muted/30 transition"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-semibold text-lg">{p.title}</div>
-                {p.featured ? (
-                  <span className="text-xs rounded-full border px-2 py-1 text-muted-foreground">
-                    Featured
-                  </span>
-                ) : null}
-              </div>
+  key={p.id}
+  href={`/projects/${p.slug}`}
+  className="rounded-xl border overflow-hidden hover:bg-muted/30 transition block"
+>
 
-              <div className="text-sm text-muted-foreground mt-1">
-                {p.shortDesc}
-              </div>
+  {/* Cover Image */}
+  {p.coverImage ? (
+    <img
+      src={p.coverImage}
+      alt={p.title}
+      className="w-full h-48 object-cover border-b"
+    />
+  ) : null}
 
-              {(p.tags?.length || 0) > 0 ? (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {p.tags.slice(0, 8).map((t) => (
-                    <span key={t} className="text-xs rounded-full border px-2 py-1 text-muted-foreground">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </a>
+  {/* Content wrapper */}
+  <div className="p-6">
+
+    <div className="font-semibold text-lg">
+      {p.title}
+    </div>
+
+    <div className="text-sm text-muted-foreground mt-1">
+      {p.shortDesc}
+    </div>
+
+    {p.tags?.length > 0 && (
+      <div className="flex flex-wrap gap-2 mt-4">
+        {p.tags.map((tag: string) => (
+          <span
+            key={tag}
+            className="text-xs border rounded-full px-2 py-1 text-muted-foreground"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    )}
+
+  </div>
+
+</a>
           ))}
         </div>
       )}

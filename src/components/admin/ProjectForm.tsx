@@ -43,6 +43,24 @@ export default function ProjectForm({
 const [tagsInput, setTagsInput] = useState((initial.tags || []).join(", "));
 const [techInput, setTechInput] = useState((initial.techStack || []).join(", "));
 
+async function uploadCover(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/admin/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  const json = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(json?.error?.message ?? `Upload failed (HTTP ${res.status})`);
+  }
+
+  return json.data.url as string;
+}
+
   function setField<K extends keyof Project>(key: K, value: Project[K]) {
     setP((prev) => ({ ...prev, [key]: value }));
   }
@@ -290,6 +308,51 @@ const [techInput, setTechInput] = useState((initial.techStack || []).join(", "))
               placeholder="https://..."
             />
           </div>
+
+          <div className="grid gap-2">
+            <label htmlFor="project-coverUpload" className="text-sm font-medium">
+              Upload Cover Image
+            </label>
+
+            <input
+              id="project-coverUpload"
+              name="coverUpload"
+              type="file"
+              accept="image/*"
+              className="w-full border rounded p-2"
+              title="Upload cover image"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+
+                try {
+                  setSaving(true);
+                  const url = await uploadCover(file);
+                  setField("coverImage", url as any);
+                  toast.success("Cover image uploaded");
+                } catch (err: any) {
+                  console.error(err);
+                  toast.error(err?.message ?? "Upload failed");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            />
+
+            {p.coverImage ? (
+              <img
+                src={p.coverImage}
+                alt="Cover preview"
+                className="w-full rounded-lg border"
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Upload an image or paste a URL above.
+              </p>
+            )}
+          </div>
+
+          
 
           <div className="grid gap-2">
             <label htmlFor="project-liveUrl" className="text-sm font-medium">

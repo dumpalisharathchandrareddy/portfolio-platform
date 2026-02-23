@@ -3,17 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import ImagePicker from "@/components/admin/image-picker";
 
 type Profile = {
   id: string;
   fullName: string;
   headline: string;
   summary: string;
-  location?: string;
-  githubUrl?: string;
-  linkedinUrl?: string;
-  profileImage?: string;
-  resumeUrl?: string;
+  location?: string | null;
+  githubUrl?: string | null;
+  linkedinUrl?: string | null;
+  websiteUrl?: string | null;
+  profileImage?: string | null;
+  resumeUrl?: string | null;
 };
 
 type ApiResponse<T> =
@@ -50,9 +52,7 @@ export default function AdminProfilePage() {
           );
         }
 
-        if (!cancelled) {
-          setProfile(json.data);
-        }
+        if (!cancelled) setProfile(json.data);
       } catch (err: any) {
         console.error(err);
         toast.error(err?.message ?? "Failed to load profile");
@@ -84,15 +84,12 @@ export default function AdminProfilePage() {
 
       if (!res.ok || !json || !("success" in json) || json.success === false) {
         const msg =
-          (json as any)?.error?.message ||
-          `Save failed (HTTP ${res.status})`;
+          (json as any)?.error?.message || `Save failed (HTTP ${res.status})`;
         toast.error(msg);
         return;
       }
 
       toast.success("Profile saved");
-
-      // Refresh any server components and go back to dashboard
       router.refresh();
       router.push("/admin");
     } catch (err: any) {
@@ -112,7 +109,9 @@ export default function AdminProfilePage() {
         <p className="text-sm text-muted-foreground">
           No profile record found in the database.
         </p>
+
         <button
+          type="button"
           onClick={() => router.push("/admin")}
           className="rounded-lg border px-4 py-2 text-sm hover:bg-muted/40 transition"
         >
@@ -124,10 +123,17 @@ export default function AdminProfilePage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Edit Profile</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Edit Profile</h1>
+          <p className="text-sm text-muted-foreground">
+            This content powers metadata, homepage hero, footer, and contact links.
+          </p>
+        </div>
 
         <button
+          type="button"
           onClick={() => router.push("/admin")}
           className="rounded-lg border px-3 py-2 text-sm hover:bg-muted/40 transition"
         >
@@ -135,53 +141,150 @@ export default function AdminProfilePage() {
         </button>
       </div>
 
+      {/* A3: Profile image (URL + Drag/Drop upload) */}
+      <ImagePicker
+        label="Profile Picture"
+        value={profile.profileImage ?? ""}
+        onChange={(url) => setProfile({ ...profile, profileImage: url })}
+        uploadEndpoint="/api/admin/upload"
+      />
+
+      {/* Fields */}
       <div className="grid gap-4">
-        <input
-          className="w-full border rounded p-2"
-          value={profile.fullName}
-          onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
-          placeholder="Full Name"
-        />
+        <div className="grid gap-2">
+          <label htmlFor="fullName" className="text-sm font-medium">
+            Full Name
+          </label>
+          <input
+            id="fullName"
+            name="fullName"
+            className="w-full border rounded p-2"
+            value={profile.fullName}
+            onChange={(e) =>
+              setProfile({ ...profile, fullName: e.target.value })
+            }
+            placeholder="e.g. John Doe"
+          />
+        </div>
 
-        <input
-          className="w-full border rounded p-2"
-          value={profile.headline}
-          onChange={(e) => setProfile({ ...profile, headline: e.target.value })}
-          placeholder="Headline"
-        />
+        <div className="grid gap-2">
+          <label htmlFor="headline" className="text-sm font-medium">
+            Headline
+          </label>
+          <input
+            id="headline"
+            name="headline"
+            className="w-full border rounded p-2"
+            value={profile.headline}
+            onChange={(e) =>
+              setProfile({ ...profile, headline: e.target.value })
+            }
+            placeholder="e.g. Full-Stack Engineer | Next.js | Spring Boot | AWS"
+          />
+        </div>
 
-        <textarea
-          className="w-full border rounded p-2"
-          value={profile.summary}
-          onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
-          placeholder="Summary"
-          rows={6}
-        />
+        <div className="grid gap-2">
+          <label htmlFor="summary" className="text-sm font-medium">
+            Summary
+          </label>
+          <textarea
+            id="summary"
+            name="summary"
+            className="w-full border rounded p-2"
+            value={profile.summary}
+            onChange={(e) =>
+              setProfile({ ...profile, summary: e.target.value })
+            }
+            placeholder="Short professional summary used across your portfolio."
+            rows={6}
+          />
+        </div>
 
-        <input
-          className="w-full border rounded p-2"
-          value={profile.githubUrl ?? ""}
-          onChange={(e) => setProfile({ ...profile, githubUrl: e.target.value })}
-          placeholder="GitHub URL"
-        />
+        <div className="grid gap-2">
+          <label htmlFor="location" className="text-sm font-medium">
+            Location (optional)
+          </label>
+          <input
+            id="location"
+            name="location"
+            className="w-full border rounded p-2"
+            value={profile.location ?? ""}
+            onChange={(e) =>
+              setProfile({ ...profile, location: e.target.value || null })
+            }
+            placeholder="e.g. Connecticut, USA"
+          />
+        </div>
 
-        <input
-          className="w-full border rounded p-2"
-          value={profile.linkedinUrl ?? ""}
-          onChange={(e) =>
-            setProfile({ ...profile, linkedinUrl: e.target.value })
-          }
-          placeholder="LinkedIn URL"
-        />
+        <div className="grid gap-2">
+          <label htmlFor="githubUrl" className="text-sm font-medium">
+            GitHub URL
+          </label>
+          <input
+            id="githubUrl"
+            name="githubUrl"
+            className="w-full border rounded p-2"
+            value={profile.githubUrl ?? ""}
+            onChange={(e) =>
+              setProfile({ ...profile, githubUrl: e.target.value || null })
+            }
+            placeholder="https://github.com/username"
+          />
+        </div>
 
-        <input
-          className="w-full border rounded p-2"
-          value={profile.resumeUrl ?? ""}
-          onChange={(e) => setProfile({ ...profile, resumeUrl: e.target.value })}
-          placeholder="Resume URL"
-        />
+        <div className="grid gap-2">
+          <label htmlFor="linkedinUrl" className="text-sm font-medium">
+            LinkedIn URL
+          </label>
+          <input
+            id="linkedinUrl"
+            name="linkedinUrl"
+            className="w-full border rounded p-2"
+            value={profile.linkedinUrl ?? ""}
+            onChange={(e) =>
+              setProfile({ ...profile, linkedinUrl: e.target.value || null })
+            }
+            placeholder="https://www.linkedin.com/in/username"
+          />
+        </div>
+
+        <div className="grid gap-2">
+          <label htmlFor="websiteUrl" className="text-sm font-medium">
+            Website URL (optional)
+          </label>
+          <input
+            id="websiteUrl"
+            name="websiteUrl"
+            className="w-full border rounded p-2"
+            value={profile.websiteUrl ?? ""}
+            onChange={(e) =>
+              setProfile({ ...profile, websiteUrl: e.target.value || null })
+            }
+            placeholder="https://yourdomain.com"
+          />
+        </div>
+
+        <div className="grid gap-2">
+          <label htmlFor="resumeUrl" className="text-sm font-medium">
+            Resume URL
+          </label>
+          <input
+            id="resumeUrl"
+            name="resumeUrl"
+            className="w-full border rounded p-2"
+            value={profile.resumeUrl ?? ""}
+            onChange={(e) =>
+              setProfile({ ...profile, resumeUrl: e.target.value || null })
+            }
+            placeholder="https://... (PDF link or hosted resume)"
+          />
+          <p className="text-xs text-muted-foreground">
+            Tip: We can add drag/drop resume upload + versioning next.
+          </p>
+        </div>
       </div>
 
+      {/* Actions */}
       <div className="flex gap-3 justify-end">
         <button
           type="button"

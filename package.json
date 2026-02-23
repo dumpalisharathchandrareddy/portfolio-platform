@@ -26,7 +26,9 @@
     "next": "^16.1.6",
     "next-auth": "^4.24.13",
     "next-themes": "^0.4.6",
+    "openai": "^6.23.0",
     "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.624",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -41,6 +43,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20.19.33",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "babel-plugin-react-compiler": "1.0.0",

@@ -141,3 +141,14 @@ model ContactSubmission {
   @@index([email])
 }
 
+model Resume {
+  id        String   @id @default(cuid())
+  url       String
+  fileName  String?
+  isActive  Boolean  @default(false)
+  parsed    Json?
+  createdAt DateTime @default(now())
+
+  @@index([isActive])
+  @@index([createdAt])
+}

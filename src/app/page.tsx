@@ -29,37 +29,21 @@ export default async function HomePage() {
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-16 space-y-16">
-
       {/* HERO */}
       <section className="space-y-4">
-        {profile.profileImage && (
-  <img
-    src={profile.profileImage}
-    alt={profile.fullName}
-    className="w-32 h-32 rounded-full object-cover border"
-  />
-)}
+        <AvatarFallback
+          name={profile?.fullName ?? "Your Name"}
+          src={profile?.profileImage ?? null}
+          size={128} // ✅ match old w-32 h-32
+        />
 
-<AvatarFallback
-  name={profile.fullName}
-  src={profile.profileImage ?? null}
-  size={96}
-/>
+        <h1 className="text-4xl font-bold">{profile?.fullName || "Your Name"}</h1>
 
-        <h1 className="text-4xl font-bold">
-          {profile?.fullName || "Your Name"}
-        </h1>
+        <p className="text-xl text-muted-foreground">{profile?.headline}</p>
 
-        <p className="text-xl text-muted-foreground">
-          {profile?.headline}
-        </p>
-
-        <p className="max-w-xl text-muted-foreground">
-          {profile?.summary}
-        </p>
+        <p className="max-w-xl text-muted-foreground">{profile?.summary}</p>
 
         <div className="flex gap-4 pt-4">
-
           {profile?.githubUrl && (
             <Link href={profile.githubUrl} className="underline">
               GitHub
@@ -77,17 +61,13 @@ export default async function HomePage() {
               Resume
             </Link>
           )}
-
         </div>
       </section>
 
       {/* FEATURED PROJECTS */}
       <section className="space-y-6">
-
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-semibold">
-            Featured Projects
-          </h2>
+          <h2 className="text-2xl font-semibold">Featured Projects</h2>
 
           <Link href="/projects" className="underline">
             View all →
@@ -95,27 +75,21 @@ export default async function HomePage() {
         </div>
 
         <div className="grid gap-6">
-
           {projects.map((project: any) => (
             <Link
               key={project.id}
               href={`/projects/${project.slug}`}
               className="border rounded-lg p-4 hover:bg-muted/40 transition"
             >
-              <div className="font-semibold">
-                {project.title}
-              </div>
+              <div className="font-semibold">{project.title}</div>
 
               <div className="text-sm text-muted-foreground">
                 {project.shortDesc}
               </div>
             </Link>
           ))}
-
         </div>
-
       </section>
-
     </main>
   );
 }

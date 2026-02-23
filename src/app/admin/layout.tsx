@@ -1,5 +1,9 @@
+// src/app/admin/layout.tsx
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+
 import AdminUserMenu from "@/components/admin/admin-user-menu";
+import { authOptions } from "@/lib/authOptions";
 
 const nav = [
   { href: "/admin", label: "Dashboard" },
@@ -9,19 +13,38 @@ const nav = [
   { href: "/admin/experience", label: "Experience" },
   { href: "/admin/certifications", label: "Certifications" },
   { href: "/admin/contact", label: "Contact" },
+  { href: "/admin/resume", label: "Resume" },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // Middleware is responsible for redirecting unauthorized users away from /admin/*
+  // So layout must NEVER redirect (prevents /admin/signin loops).
+  const session = await getServerSession(authOptions);
+
+  // If not logged in, show only the page content (signin page),
+  // and DO NOT render sidebar/topbar or any admin UI.
+  if (!session?.user?.email) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen">
       <div className="border-b bg-background">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+            <Link
+              href="/"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
               ← Back to site
             </Link>
             <span className="text-sm font-medium">Admin</span>
           </div>
+
           <AdminUserMenu />
         </div>
       </div>

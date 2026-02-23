@@ -15,7 +15,12 @@ export default function AdminUserMenu() {
 
       <button
         type="button"
-        onClick={() => signOut({ callbackUrl: "/" })}
+        onClick={() =>
+          signOut({
+            callbackUrl: "/admin/signin",
+            redirect: true,
+          })
+        }
         className="rounded-lg border px-3 py-2 text-sm hover:bg-muted/30 transition"
       >
         Logout

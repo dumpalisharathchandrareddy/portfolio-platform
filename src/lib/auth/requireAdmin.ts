@@ -4,16 +4,9 @@ import { authOptions } from "@/lib/authOptions";
 export async function requireAdmin() {
   const session = await getServerSession(authOptions);
 
-  const allowed = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-
-  const email = session?.user?.email?.toLowerCase() || "";
-
-  if (!session || !email || !allowed.includes(email)) {
+  if (!session?.user?.email) {
     return { ok: false as const };
   }
 
-  return { ok: true as const, email };
+  return { ok: true as const, session };
 }

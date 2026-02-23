@@ -14,6 +14,22 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const { id } = await ctx.params;
 
-  await prisma.skill.delete({ where: { id } });
+  // delete skill and get its categoryId
+  const deleted = await prisma.skill.delete({
+    where: { id },
+    select: { categoryId: true },
+  });
+
+  // check if category is now empty
+  const remaining = await prisma.skill.count({
+    where: { categoryId: deleted.categoryId },
+  });
+
+  // if no skills remain, delete the category automatically
+  if (remaining === 0) {
+    await prisma.skillCategory.delete({
+      where: { id: deleted.categoryId },
+    });
+  }
   return Response.json({ success: true });
 }

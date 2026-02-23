@@ -5,10 +5,14 @@ import "./globals.css";
 import Providers from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import SiteHeader from "@/components/site-header";
-import Footer from "@/components/footer"; // ✅ dynamic footer
+
+
+
 
 import { prisma } from "@/lib/prisma";
 import { getBaseUrl } from "@/lib/site-url";
+import SiteFooter from "@/components/site-footer";
+import GoToTop from "@/components/go-to-top";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -76,7 +80,9 @@ export default function RootLayout({
           </main>
 
           {/* Dynamic DB-driven Footer */}
-          <Footer />
+          
+          <SiteFooter />
+          <GoToTop />
 
         </Providers>
 

@@ -1,18 +1,39 @@
+// src/app/api/admin/resume/upload/route.ts
 export const runtime = "nodejs";
 
 import { requireAdmin } from "@/lib/auth/requireAdmin";
 import { prisma } from "@/lib/prisma";
 import { cloudinary } from "@/lib/cloudinary";
 import { parseResumeFromPdfBuffer } from "@/lib/resume/parse";
+import { extractResumeWithLLM } from "@/lib/resume/llm-extract";
 
 function safeBaseName(name: string) {
-  // "Sharath_Resume.pdf" -> "Sharath_Resume"
   const base = name.replace(/\.[^/.]+$/, "");
-  return base
-    .trim()
-    .replace(/[^a-zA-Z0-9-_ ]+/g, "")
-    .replace(/\s+/g, "_")
-    .slice(0, 80) || "resume";
+  return (
+    base
+      .trim()
+      .replace(/[^a-zA-Z0-9-_ ]+/g, "")
+      .replace(/\s+/g, "_")
+      .slice(0, 80) || "resume"
+  );
+}
+
+function capText(s: string, max = 120_000) {
+  if (!s) return "";
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+function uniqInsensitive(list: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of list ?? []) {
+    const k = String(item ?? "").trim().toLowerCase();
+    if (!k) continue;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(String(item ?? "").trim());
+  }
+  return out;
 }
 
 export async function POST(req: Request) {
@@ -46,50 +67,94 @@ export async function POST(req: Request) {
     const originalName = (file as any).name ? String((file as any).name) : "resume.pdf";
     const baseName = safeBaseName(originalName);
 
-    // ✅ Upload as PUBLIC "upload" delivery type, RAW resource, forced PDF format
+    // 1) Upload PDF to Cloudinary
     const base64 = `data:${file.type};base64,${bytes.toString("base64")}`;
-
     const uploaded = await cloudinary.uploader.upload(base64, {
       folder: "portfolio/resumes",
       resource_type: "raw",
-      type: "upload",       // ✅ IMPORTANT: public delivery type
-      public_id: baseName,  // stable id inside folder
+      type: "upload",
+      public_id: baseName,
       overwrite: true,
-      format: "pdf",        // ✅ ensures .pdf URL + correct mime
+      format: "pdf",
     });
 
-    // Parse suggestion (best-effort)
-    let suggestion: any = null;
+    // 2) Parse PDF -> rawText + heuristic skills
+    let parsed: Awaited<ReturnType<typeof parseResumeFromPdfBuffer>> | null = null;
+
     try {
-      suggestion = await parseResumeFromPdfBuffer(bytes);
+      parsed = await parseResumeFromPdfBuffer(bytes);
     } catch (e) {
       console.error("Resume parse failed:", e);
-      suggestion = { skills: [], rawTextPreview: "" };
+      parsed = null;
     }
 
+    const rawText = capText(parsed?.rawText ?? "");
+    const rawTextPreview = ""; // ✅ never store preview for UI usage (optional, keep empty)
+    const detectedSkills = Array.isArray(parsed?.detectedSkills) ? parsed!.detectedSkills : [];
+
+    // 3) LLM extraction (runs only on upload)
+    let extracted: any = null;
+    try {
+      if (rawText.trim()) {
+        extracted = await extractResumeWithLLM({
+          rawText,
+          rawTextPreview: parsed?.rawTextPreview ?? "", // used only for the LLM prompt; NOT returned
+          detectedSkills,
+        });
+      }
+    } catch (e) {
+      console.error("LLM extract failed:", e);
+      extracted = null;
+    }
+
+    // 4) Save Resume row with parsed + extracted
     const resume = await prisma.resume.create({
       data: {
-        url: uploaded.secure_url, // should end with .pdf now
+        url: uploaded.secure_url,
         fileName: originalName,
         isActive: false,
-        parsed: suggestion ?? undefined,
+        parsed: {
+          // keep rawText in DB for traceability / future re-processing (not returned)
+          rawText,
+          rawTextPreview,
+          detectedSkills,
+          heuristic: parsed?.heuristic ?? null,
+
+          // ✅ store LLM result so commit route is fast and never calls OpenAI
+          extracted: extracted ?? null,
+          extractedAt: extracted ? new Date().toISOString() : null,
+        },
       },
-      select: {
-        id: true,
-        url: true,
-        fileName: true,
-        isActive: true,
-        createdAt: true,
-      },
+      select: { id: true, url: true },
     });
 
-    // ✅ RESPONSE SHAPE your UI expects
+    // 5) Prepare safe suggestion for UI (NO rawText, NO rawTextPreview)
+    // Your UI expects: profile fields + skills[]
+    const suggestionForUI =
+      extracted && typeof extracted === "object"
+        ? {
+            ...(extracted.profile ?? {}),
+            skills: uniqInsensitive(
+              Array.isArray(extracted.skills)
+                ? extracted.skills.map((s: any) => String(s?.name ?? "").trim()).filter(Boolean)
+                : detectedSkills
+            ),
+          }
+        : {
+            ...(parsed?.heuristic ?? {}),
+            skills: uniqInsensitive(detectedSkills),
+          };
+
+    // Ensure no accidental raw text leaks
+    delete (suggestionForUI as any).rawText;
+    delete (suggestionForUI as any).rawTextPreview;
+
     return Response.json({
       success: true,
       data: {
         resumeId: resume.id,
         url: resume.url,
-        suggestion,
+        suggestion: suggestionForUI,
       },
     });
   } catch (e: any) {

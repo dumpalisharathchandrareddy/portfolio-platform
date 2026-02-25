@@ -12,19 +12,39 @@ export type ResumeSuggestion = {
   rawTextPreview: string;
 };
 
+export type ParsedResume = {
+  rawText: string;
+  rawTextPreview: string;
+  detectedSkills: string[];
+  heuristic: ResumeSuggestion;
+};
+
 const require = createRequire(import.meta.url);
 
-const norm = (s: string) => s.trim().toLowerCase();
+// ✅ IMPORTANT: import the library file directly (avoids pdf-parse test/demo file ENOENT)
+let pdfParse: any;
+try {
+  pdfParse = require("pdf-parse/lib/pdf-parse.js");
+} catch {
+  try {
+    pdfParse = require("pdf-parse/lib/pdf-parse");
+  } catch {
+    const pdfParseNS: any = require("pdf-parse");
+    pdfParse = pdfParseNS?.default ?? pdfParseNS;
+  }
+}
+
+const normLower = (s: string) => String(s ?? "").trim().toLowerCase();
 
 function uniqInsensitive(list: string[]) {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of list) {
-    const k = norm(item);
+    const k = normLower(item);
     if (!k) continue;
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push(item.trim());
+    out.push(String(item).trim());
   }
   return out;
 }
@@ -38,7 +58,6 @@ function isHeadingLine(line: string) {
   const s = line.trim();
   if (!s) return false;
 
-  // common headings (case-insensitive)
   if (
     /^(technical\s+skills|skills|core\s+skills|key\s+skills|technologies|tech\s+stack|tools)$/i.test(
       s
@@ -47,9 +66,9 @@ function isHeadingLine(line: string) {
     return true;
   }
 
-  // ALL CAPS short headings like "SKILLS"
   const lettersOnly = s.replace(/[^A-Za-z\s]/g, "").trim();
   if (!lettersOnly) return false;
+
   const isAllCaps = lettersOnly === lettersOnly.toUpperCase();
   const wordCount = lettersOnly.split(/\s+/).filter(Boolean).length;
   return isAllCaps && wordCount <= 4;
@@ -58,13 +77,13 @@ function isHeadingLine(line: string) {
 function looksLikeNextSectionHeading(line: string) {
   const s = line.trim();
   if (!s) return false;
+
   return /^(professional\s+summary|summary|experience|work\s+experience|education|projects|certifications|achievements|publications|contact)$/i.test(
     s
   );
 }
 
 function tokenizeSkillLine(line: string) {
-  // Split by common separators: commas, pipes, bullets, middots, slashes
   const parts = line
     .replace(/[•·●▪◦]/g, ",")
     .replace(/[|]/g, ",")
@@ -72,7 +91,6 @@ function tokenizeSkillLine(line: string) {
     .map((x) => x.trim())
     .filter(Boolean);
 
-  // Clean tokens
   return parts
     .map((p) => p.replace(/^[-–—]+/, "").trim())
     .map((p) => p.replace(/\s*[:;]+\s*$/, "").trim())
@@ -80,20 +98,16 @@ function tokenizeSkillLine(line: string) {
 }
 
 function extractSkillsFromSkillsSection(lines: string[]) {
-  // Find the first skills heading
   const startIdx = lines.findIndex((l) => isHeadingLine(l));
-  if (startIdx < 0) return [] as string[];
+  if (startIdx < 0) return [];
 
-  // Collect lines after heading until next heading-ish section
   const collected: string[] = [];
-  for (let i = startIdx + 1; i < Math.min(lines.length, startIdx + 40); i++) {
+  for (let i = startIdx + 1; i < Math.min(lines.length, startIdx + 60); i++) {
     const l = lines[i].trim();
     if (!l) continue;
 
     if (isHeadingLine(l) || looksLikeNextSectionHeading(l)) break;
-
-    // If line is extremely long, it's likely paragraph text; stop early
-    if (l.length > 180) break;
+    if (l.length > 220) break;
 
     collected.push(l);
   }
@@ -103,14 +117,10 @@ function extractSkillsFromSkillsSection(lines: string[]) {
 }
 
 function pickSkills(text: string, lines: string[]) {
-  // 1) Prefer section-based extraction (much higher precision)
   const sectionSkills = extractSkillsFromSkillsSection(lines);
   if (sectionSkills.length) return sectionSkills;
 
-  // 2) Fallback: keyword scan (broad, hard-coded)
-  // Keep this list broad but not insane; taxonomy will categorize later.
   const skillKeywords = [
-    // Languages
     "Java",
     "JavaScript",
     "TypeScript",
@@ -121,8 +131,6 @@ function pickSkills(text: string, lines: string[]) {
     "SQL",
     "Bash",
     "PowerShell",
-
-    // Backend & APIs
     "Spring",
     "Spring Boot",
     "Spring Cloud",
@@ -138,8 +146,6 @@ function pickSkills(text: string, lines: string[]) {
     "Microservices",
     "OAuth2",
     "JWT",
-
-    // Frontend
     "React",
     "Next.js",
     "Angular",
@@ -147,19 +153,13 @@ function pickSkills(text: string, lines: string[]) {
     "HTML",
     "CSS",
     "Tailwind",
-
-    // Data / DB
     "PostgreSQL",
     "MySQL",
     "MongoDB",
     "Redis",
     "Elasticsearch",
-
-    // Messaging
     "Kafka",
     "RabbitMQ",
-
-    // Cloud
     "AWS",
     "Azure",
     "GCP",
@@ -170,8 +170,6 @@ function pickSkills(text: string, lines: string[]) {
     "ECS",
     "EKS",
     "CloudWatch",
-
-    // DevOps
     "Docker",
     "Kubernetes",
     "Terraform",
@@ -179,22 +177,17 @@ function pickSkills(text: string, lines: string[]) {
     "GitHub Actions",
     "CI/CD",
     "Git",
-
-    // Observability
     "Prometheus",
     "Grafana",
     "Splunk",
     "ELK",
     "OpenTelemetry",
-
-    // Testing
     "JUnit",
     "Mockito",
     "Jest",
     "Selenium",
     "Cypress",
-
-    // AI/ML
+    "Playwright",
     "Machine Learning",
     "Deep Learning",
     "NLP",
@@ -202,6 +195,9 @@ function pickSkills(text: string, lines: string[]) {
     "TensorFlow",
     "scikit-learn",
     "MLflow",
+    "LLM",
+    "RAG",
+    "LangChain",
   ];
 
   const lower = text.toLowerCase();
@@ -209,94 +205,24 @@ function pickSkills(text: string, lines: string[]) {
   return uniqInsensitive(hits);
 }
 
-/**
- * IMPORTANT for Next.js + Turbopack:
- * pdfjs fake worker tries to import pdf.worker.*.
- * We must set GlobalWorkerOptions.workerSrc to a URL that exists.
- */
-async function loadPdfJs() {
-  // Prefer legacy ESM build
-  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
-
-  // Try Turbopack-friendly worker URL import
-  try {
-    const workerUrlMod = (await import(
-      "pdfjs-dist/legacy/build/pdf.worker.mjs?url"
-    )) as any;
-
-    const workerUrl =
-      typeof workerUrlMod?.default === "string" ? workerUrlMod.default : null;
-
-    if (workerUrl && pdfjs?.GlobalWorkerOptions) {
-      pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-    }
-  } catch {
-    // Fallback: absolute file URL via require.resolve
-    try {
-      const workerPath = require.resolve(
-        "pdfjs-dist/legacy/build/pdf.worker.mjs"
-      );
-      if (pdfjs?.GlobalWorkerOptions) {
-        pdfjs.GlobalWorkerOptions.workerSrc = `file://${workerPath}`;
-      }
-    } catch {
-      // If both fail, we still continue; we also pass disableWorker: true below.
-    }
-  }
-
-  return pdfjs;
+async function extractTextWithPdfParse(pdfBuffer: Buffer): Promise<string> {
+  const result = await pdfParse(pdfBuffer);
+  const text = typeof result?.text === "string" ? result.text : "";
+  return text.trim();
 }
 
-async function extractTextWithPdfJs(pdfBuffer: Buffer): Promise<string> {
-  const pdfjs = await loadPdfJs();
+export async function parseResumeFromPdfBuffer(pdfBuffer: Buffer): Promise<ParsedResume> {
+  const rawText = await extractTextWithPdfParse(pdfBuffer);
 
-  // ✅ MUST be Uint8Array (pdf.js throws if Buffer)
-  const data = new Uint8Array(
-    pdfBuffer.buffer.slice(
-      pdfBuffer.byteOffset,
-      pdfBuffer.byteOffset + pdfBuffer.byteLength
-    )
-  );
-
-  // disableWorker still uses "fake worker" internally, so workerSrc must be valid.
-  const loadingTask = pdfjs.getDocument({
-    data,
-    disableWorker: true,
-    // reduce noise / optional
-    verbosity: 0,
-  });
-
-  const doc = await loadingTask.promise;
-
-  let fullText = "";
-  for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
-    const page = await doc.getPage(pageNo);
-    const content = await page.getTextContent();
-
-    const pageText = (content.items as Array<{ str?: string }>)
-      .map((it) => (typeof it.str === "string" ? it.str : ""))
-      .join(" ");
-
-    fullText += pageText + "\n";
-  }
-
-  return fullText;
-}
-
-export async function parseResumeFromPdfBuffer(
-  pdfBuffer: Buffer
-): Promise<ResumeSuggestion> {
-  const raw = (await extractTextWithPdfJs(pdfBuffer)).trim();
-
-  const lines: string[] = raw
+  const lines: string[] = rawText
     .split("\n")
-    .map((l: string) => l.trim())
-    .filter((l: string) => Boolean(l));
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-  const topBlock = lines.slice(0, 25).join("\n");
+  const rawTextPreview = lines.slice(0, 30).join("\n").slice(0, 1000);
 
   const fullName =
-    lines.find((l: string) => {
+    lines.find((l) => {
       const x = l.trim();
       if (x.length < 3 || x.length > 60) return false;
       if (/@/.test(x)) return false;
@@ -305,40 +231,46 @@ export async function parseResumeFromPdfBuffer(
       return true;
     }) ?? undefined;
 
-  const email = firstMatch(raw, /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+  const email = firstMatch(rawText, /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
 
   const githubUrl =
-    firstMatch(raw, /(https?:\/\/(www\.)?github\.com\/[^\s)]+)/i) ||
-    firstMatch(raw, /\bgithub\.com\/[^\s)]+/i);
+    firstMatch(rawText, /(https?:\/\/(www\.)?github\.com\/[^\s)]+)/i) ||
+    firstMatch(rawText, /\bgithub\.com\/[^\s)]+/i);
 
   const linkedinUrl =
-    firstMatch(raw, /(https?:\/\/(www\.)?linkedin\.com\/[^\s)]+)/i) ||
-    firstMatch(raw, /\blinkedin\.com\/[^\s)]+/i);
+    firstMatch(rawText, /(https?:\/\/(www\.)?linkedin\.com\/[^\s)]+)/i) ||
+    firstMatch(rawText, /\blinkedin\.com\/[^\s)]+/i);
 
-  const websiteUrl = firstMatch(raw, /(https?:\/\/[^\s)]+)/i);
+  const websiteUrl = firstMatch(rawText, /(https?:\/\/[^\s)]+)/i);
 
   let headline: string | undefined;
   if (fullName) {
-    const idx = lines.findIndex((x: string) => x === fullName);
+    const idx = lines.findIndex((x) => x === fullName);
     if (idx >= 0) {
       const maybe = lines[idx + 1];
-      if (maybe && maybe.length <= 120) headline = maybe;
+      if (maybe && maybe.length <= 140) headline = maybe;
     }
   }
 
-  const skills = pickSkills(raw, lines);
+  const detectedSkills = pickSkills(rawText, lines);
 
-  const toHttp = (u?: string) =>
-    !u ? undefined : u.startsWith("http") ? u : `https://${u}`;
+  const toHttp = (u?: string) => (!u ? undefined : u.startsWith("http") ? u : `https://${u}`);
 
-  return {
+  const heuristic: ResumeSuggestion = {
     fullName,
     email,
     githubUrl: toHttp(githubUrl),
     linkedinUrl: toHttp(linkedinUrl),
     websiteUrl,
     headline,
-    skills,
-    rawTextPreview: topBlock.slice(0, 900),
+    skills: detectedSkills,
+    rawTextPreview: rawTextPreview.slice(0, 900),
+  };
+
+  return {
+    rawText,
+    rawTextPreview,
+    detectedSkills,
+    heuristic,
   };
 }

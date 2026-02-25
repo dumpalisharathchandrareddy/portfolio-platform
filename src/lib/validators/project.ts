@@ -1,21 +1,34 @@
+// src/lib/validators/project.ts
 import { z } from "zod";
 
+const nullishTrimmed = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    return s ? s : null;
+  });
+
 export const projectInputSchema = z.object({
-  title: z.string().min(2),
-  slug: z
-    .string()
-    .min(2)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase kebab-case (e.g. my-project)"),
-  shortDesc: z.string().min(10).max(300),
-  caseStudyMd: z.string().min(20),
-  tags: z.array(z.string().min(1)).default([]),
-  techStack: z.array(z.string().min(1)).default([]),
+  // id is not required for create; you pass it for edit but prisma ignores if not in data
+  id: z.string().optional(),
+
+  title: z.string().min(1).max(180),
+  slug: z.string().min(1).max(120),
+
+  shortDesc: z.string().min(1).max(400),
+  caseStudyMd: z.string().optional().default(""),
+
+  tags: z.array(z.string()).default([]),
+  techStack: z.array(z.string()).default([]),
+
   featured: z.boolean().default(false),
   status: z.enum(["DRAFT", "PUBLISHED"]).default("DRAFT"),
-  coverImage: z.string().url().optional().nullable(),
-  liveUrl: z.string().url().optional().nullable(),
-  repoUrl: z.string().url().optional().nullable(),
+
+  // ✅ optional/nullable URLs + cover
+  coverImage: nullishTrimmed.optional(),
+  liveUrl: nullishTrimmed.optional(),
+  repoUrl: nullishTrimmed.optional(),
+
   sortOrder: z.number().int().min(0).default(0),
 });
-
-export type ProjectInput = z.infer<typeof projectInputSchema>;

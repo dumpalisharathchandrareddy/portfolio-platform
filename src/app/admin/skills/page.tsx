@@ -6,37 +6,43 @@ import { toast } from "sonner";
 type Skill = {
   id: string;
   name: string;
-  sortOrder: number;
 };
 
 type Category = {
   id: string;
   name: string;
-  sortOrder: number;
   skills: Skill[];
 };
 
-type Mode = "AUTO" | "EXISTING" | "NEW";
+type ApiOk<T> = { success: true; data: T };
+type ApiErr = { success: false; error: { message: string } };
+type ApiResponse<T> = ApiOk<T> | ApiErr;
+
+function apiErrorMessage(json: unknown, fallback: string) {
+  if (json && typeof json === "object" && "success" in json) {
+    const j = json as any;
+    if (j.success === false) return j?.error?.message ?? fallback;
+  }
+  return fallback;
+}
+
+const CREATE_NEW = "__new__";
+const AUTO = "__auto__";
 
 export default function AdminSkillsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Category create
-  const [catName, setCatName] = useState("");
-  const [catSort, setCatSort] = useState<number>(0);
+  // New category (optional)
+  const [newCatName, setNewCatName] = useState("");
 
-  // Skill create
-  const [mode, setMode] = useState<Mode>("AUTO");
-  const [skillCategoryId, setSkillCategoryId] = useState("");
-  const [newCategoryName, setNewCategoryName] = useState("");
+  // Add skill form
   const [skillName, setSkillName] = useState("");
-  const [skillSort, setSkillSort] = useState<number>(0);
+  const [categoryChoice, setCategoryChoice] = useState<string>(AUTO);
 
-  const categoryOptions = useMemo(
-    () => [...categories].sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name)),
-    [categories]
-  );
+  const categoryOptions = useMemo(() => {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+  }, [categories]);
 
   async function load() {
     setLoading(true);
@@ -49,8 +55,14 @@ export default function AdminSkillsPage() {
         return;
       }
 
-      const json = await res.json().catch(() => null);
-      setCategories(json?.data ?? []);
+      const json = (await res.json().catch(() => null)) as ApiResponse<Category[]> | null;
+      if (!json || json.success === false) {
+        toast.error(json?.error?.message ?? "Failed to load skills");
+        setCategories([]);
+        return;
+      }
+
+      setCategories(json.data ?? []);
     } catch (e) {
       console.error(e);
       toast.error("Failed to load skills");
@@ -63,33 +75,32 @@ export default function AdminSkillsPage() {
     load();
   }, []);
 
-  async function createCategory() {
-    try {
-      const res = await fetch("/api/admin/skills", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // keep your OLD payload format so nothing else breaks
-        body: JSON.stringify({
-          type: "category",
-          data: { name: catName, sortOrder: catSort },
-        }),
-      });
+  async function createCategory(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
 
-      const json = await res.json().catch(() => null);
+    const res = await fetch("/api/admin/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // legacy payload supported by your route
+      body: JSON.stringify({
+        type: "category",
+        data: { name: trimmed, sortOrder: 0 },
+      }),
+    });
 
-      if (!res.ok) {
-        toast.error(json?.error?.message ?? "Failed to create category");
-        return;
-      }
+    const json = (await res.json().catch(() => null)) as ApiResponse<{ id: string; name: string }> | null;
 
-      toast.success("Category created");
-      setCatName("");
-      setCatSort(0);
-      await load();
-    } catch (e) {
-      console.error(e);
-      toast.error("Create category failed");
+    if (!res.ok || !json) {
+      toast.error(`Failed to create category (HTTP ${res.status})`);
+      return null;
     }
+    if (json.success === false) {
+      toast.error(json.error?.message ?? "Failed to create category");
+      return null;
+    }
+
+    return json.data?.id ?? null;
   }
 
   async function createSkill() {
@@ -97,28 +108,21 @@ export default function AdminSkillsPage() {
     if (!name) return;
 
     try {
-      let body: any;
+      let body: any = { name };
 
-      // ✅ Use NEW payload so we can auto-categorize / create category
-      if (mode === "AUTO") {
-        body = { name };
-      } else if (mode === "EXISTING") {
-        if (!skillCategoryId) {
-          toast.error("Pick a category.");
+      if (categoryChoice === AUTO) {
+        // leave as auto
+      } else if (categoryChoice === CREATE_NEW) {
+        const cat = newCatName.trim();
+        if (!cat) {
+          toast.error("Enter a new category name.");
           return;
         }
-        body = { name, categoryId: skillCategoryId };
+        body = { name, categoryName: cat };
       } else {
-        if (!newCategoryName.trim()) {
-          toast.error("Enter new category name.");
-          return;
-        }
-        body = { name, categoryName: newCategoryName.trim() };
+        // existing category id
+        body = { name, categoryId: categoryChoice };
       }
-
-      // still allow sort order (optional) - if you want it later, add to API.
-      // for now we just keep UI field and ignore; or you can remove it.
-      void skillSort;
 
       const res = await fetch("/api/admin/skills", {
         method: "POST",
@@ -126,17 +130,21 @@ export default function AdminSkillsPage() {
         body: JSON.stringify(body),
       });
 
-      const json = await res.json().catch(() => null);
+      const json = (await res.json().catch(() => null)) as ApiResponse<any> | null;
 
-      if (!res.ok) {
-        toast.error(json?.error?.message ?? "Failed to create skill");
+      if (!res.ok || !json) {
+        toast.error(`Failed to create skill (HTTP ${res.status})`);
+        return;
+      }
+      if (json.success === false) {
+        toast.error(json.error?.message ?? "Failed to create skill");
         return;
       }
 
-      toast.success("Skill created");
+      toast.success("Skill added");
       setSkillName("");
-      setSkillSort(0);
-      setNewCategoryName("");
+      setNewCatName("");
+      setCategoryChoice(AUTO);
       await load();
     } catch (e) {
       console.error(e);
@@ -145,13 +153,20 @@ export default function AdminSkillsPage() {
   }
 
   async function deleteCategory(id: string) {
-    const ok = confirm("Delete this category? (skills will also be deleted)");
+    const ok = confirm("Delete this category? (skills inside will also be deleted)");
     if (!ok) return;
 
     const res = await fetch(`/api/admin/skills/category/${id}`, { method: "DELETE" });
-    const json = await res.json().catch(() => null);
+    const json = (await res.json().catch(() => null)) as ApiResponse<any> | null;
 
-    if (!res.ok) return toast.error(json?.error?.message ?? "Delete failed");
+    if (!res.ok) {
+      return toast.error(apiErrorMessage(json, `Delete failed (HTTP ${res.status})`));
+    }
+
+    if (json?.success === false) {
+      return toast.error(apiErrorMessage(json, "Delete failed"));
+    }
+
     toast.success("Category deleted");
     load();
   }
@@ -161,147 +176,45 @@ export default function AdminSkillsPage() {
     if (!ok) return;
 
     const res = await fetch(`/api/admin/skills/item/${id}`, { method: "DELETE" });
-    const json = await res.json().catch(() => null);
+    const json = (await res.json().catch(() => null)) as ApiResponse<any> | null;
 
-    if (!res.ok) return toast.error(json?.error?.message ?? "Delete failed");
+    if (!res.ok) {
+      return toast.error(apiErrorMessage(json, `Delete failed (HTTP ${res.status})`));
+    }
+
+    if (json?.success === false) {
+      return toast.error(apiErrorMessage(json, "Delete failed"));
+    }
+
     toast.success("Skill deleted");
     load();
   }
 
   if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading...</div>;
+    return <div className="text-sm text-muted-foreground">Loading…</div>;
   }
 
   return (
-    <div className="space-y-8">
-      <div>
+    <div className="space-y-8 max-w-5xl">
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Skills</h1>
         <p className="text-sm text-muted-foreground">
-          Add skills manually. Choose Auto-categorize, pick an existing category, or create a new one.
+          Add skills quickly. Pick Auto, an existing category, or create a new category.
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Add Category */}
-        <div className="rounded-xl border p-4 space-y-3">
-          <div className="font-semibold">Add Category</div>
+      {/* Add Skill */}
+      <div className="rounded-2xl border p-5 space-y-4">
+        <div className="font-semibold">Add Skill</div>
 
-          <div className="space-y-2">
-            <label htmlFor="cat-name" className="text-sm font-medium">
-              Name
-            </label>
-            <input
-              id="cat-name"
-              className="w-full border rounded p-2"
-              value={catName}
-              onChange={(e) => setCatName(e.target.value)}
-              placeholder="Backend & APIs"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="cat-sort" className="text-sm font-medium">
-              Sort Order
-            </label>
-            <input
-              id="cat-sort"
-              type="number"
-              min={0}
-              className="w-full border rounded p-2"
-              value={catSort}
-              onChange={(e) => setCatSort(Number(e.target.value))}
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={createCategory}
-            disabled={!catName.trim()}
-            className="rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60"
-          >
-            Add Category
-          </button>
-        </div>
-
-        {/* Add Skill */}
-        <div className="rounded-xl border p-4 space-y-3">
-          <div className="font-semibold">Add Skill</div>
-
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Category mode</div>
-            <div className="flex flex-wrap gap-3 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={mode === "AUTO"}
-                  onChange={() => setMode("AUTO")}
-                />
-                Auto (recommended)
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={mode === "EXISTING"}
-                  onChange={() => setMode("EXISTING")}
-                />
-                Choose existing
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={mode === "NEW"}
-                  onChange={() => setMode("NEW")}
-                />
-                Create new
-              </label>
-            </div>
-          </div>
-
-          {mode === "EXISTING" ? (
-            <div className="space-y-2">
-              <label htmlFor="skill-category" className="text-sm font-medium">
-                Category
-              </label>
-              <select
-                id="skill-category"
-                className="w-full border rounded p-2"
-                value={skillCategoryId}
-                onChange={(e) => setSkillCategoryId(e.target.value)}
-              >
-                <option value="">Select category</option>
-                {categoryOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-
-          {mode === "NEW" ? (
-            <div className="space-y-2">
-              <label htmlFor="new-category" className="text-sm font-medium">
-                New category name
-              </label>
-              <input
-                id="new-category"
-                className="w-full border rounded p-2"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Blockchain / Web3"
-              />
-            </div>
-          ) : null}
-
-          <div className="space-y-2">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2 md:col-span-2">
             <label htmlFor="skill-name" className="text-sm font-medium">
-              Skill Name
+              Skill
             </label>
             <input
               id="skill-name"
-              className="w-full border rounded p-2"
+              className="w-full border rounded-lg p-2"
               value={skillName}
               onChange={(e) => setSkillName(e.target.value)}
               placeholder="Spring Boot"
@@ -309,26 +222,48 @@ export default function AdminSkillsPage() {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="skill-sort" className="text-sm font-medium">
-              Sort Order (optional)
+            <label htmlFor="category-choice" className="text-sm font-medium">
+              Category
             </label>
-            <input
-              id="skill-sort"
-              type="number"
-              min={0}
-              className="w-full border rounded p-2"
-              value={skillSort}
-              onChange={(e) => setSkillSort(Number(e.target.value))}
-            />
-            <p className="text-xs text-muted-foreground">
-              (We keep this for ordering. Proficiency/rating is removed from UI.)
-            </p>
+            <select
+              id="category-choice"
+              className="w-full border rounded-lg p-2"
+              value={categoryChoice}
+              onChange={(e) => setCategoryChoice(e.target.value)}
+            >
+              <option value={AUTO}>Auto (recommended)</option>
+              <option disabled>────────────</option>
+              {categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+              <option disabled>────────────</option>
+              <option value={CREATE_NEW}>Create new…</option>
+            </select>
           </div>
 
+          {categoryChoice === CREATE_NEW ? (
+            <div className="space-y-2 md:col-span-3">
+              <label htmlFor="new-cat" className="text-sm font-medium">
+                New category name
+              </label>
+              <input
+                id="new-cat"
+                className="w-full border rounded-lg p-2"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Data Engineering"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={createSkill}
-            disabled={!skillName.trim() || (mode === "EXISTING" && !skillCategoryId) || (mode === "NEW" && !newCategoryName.trim())}
+            disabled={!skillName.trim() || (categoryChoice === CREATE_NEW && !newCatName.trim())}
             className="rounded-lg bg-black text-white px-4 py-2 text-sm disabled:opacity-60"
           >
             Add Skill
@@ -338,31 +273,24 @@ export default function AdminSkillsPage() {
 
       {/* List */}
       <div className="space-y-6">
-        {categories.length === 0 ? (
+        {categoryOptions.length === 0 ? (
           <div className="text-sm text-muted-foreground">No categories yet.</div>
         ) : (
           categoryOptions.map((cat) => (
-            <div key={cat.id} className="rounded-xl border p-4 space-y-3">
+            <div key={cat.id} className="rounded-2xl border p-5 space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="font-semibold">
-                  {cat.name}{" "}
-                  <span className="text-xs text-muted-foreground">
-                    (sort: {cat.sortOrder})
-                  </span>
-                </div>
+                <div className="font-semibold">{cat.name}</div>
 
                 <button
                   type="button"
                   onClick={() => deleteCategory(cat.id)}
-                  className="text-sm underline"
+                  className="text-sm underline text-muted-foreground hover:text-foreground"
                 >
-                  Delete Category
+                  Delete category
                 </button>
               </div>
 
-              {cat.skills.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No skills.</div>
-              ) : (
+              {cat.skills?.length ? (
                 <div className="flex flex-wrap gap-2">
                   {cat.skills.map((s) => (
                     <span
@@ -381,6 +309,8 @@ export default function AdminSkillsPage() {
                     </span>
                   ))}
                 </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No skills.</div>
               )}
             </div>
           ))

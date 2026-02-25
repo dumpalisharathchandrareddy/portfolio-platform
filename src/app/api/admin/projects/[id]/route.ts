@@ -1,3 +1,6 @@
+// src/app/api/admin/projects/[id]/route.ts
+export const runtime = "nodejs";
+
 import { prisma } from "@/lib/prisma";
 import { projectInputSchema } from "@/lib/validators/project";
 import { requireAdmin } from "@/lib/auth/requireAdmin";
@@ -8,10 +11,7 @@ type Ctx = { params: Promise<{ id: string }> }; // Next 16: params may be Promis
 export async function PUT(req: Request, ctx: Ctx) {
   const auth = await requireAdmin();
   if (!auth.ok) {
-    return Response.json(
-      { success: false, error: { message: "Unauthorized" } },
-      { status: 401 }
-    );
+    return Response.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }
 
   const { id } = await ctx.params;
@@ -22,10 +22,7 @@ export async function PUT(req: Request, ctx: Ctx) {
 
     const before = await prisma.project.findUnique({ where: { id } });
     if (!before) {
-      return Response.json(
-        { success: false, error: { message: "Not found" } },
-        { status: 404 }
-      );
+      return Response.json({ success: false, error: { message: "Not found" } }, { status: 404 });
     }
 
     const updated = await prisma.project.update({
@@ -33,7 +30,6 @@ export async function PUT(req: Request, ctx: Ctx) {
       data,
     });
 
-    // Next.js 16 typing requires (tag, profile)
     revalidateTag("public-projects", "default");
     revalidateTag(`public-project-${before.slug}`, "default");
     revalidateTag(`public-project-${updated.slug}`, "default");
@@ -51,20 +47,14 @@ export async function PUT(req: Request, ctx: Ctx) {
 export async function DELETE(_req: Request, ctx: Ctx) {
   const auth = await requireAdmin();
   if (!auth.ok) {
-    return Response.json(
-      { success: false, error: { message: "Unauthorized" } },
-      { status: 401 }
-    );
+    return Response.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }
 
   const { id } = await ctx.params;
 
   const existing = await prisma.project.findUnique({ where: { id } });
   if (!existing) {
-    return Response.json(
-      { success: false, error: { message: "Not found" } },
-      { status: 404 }
-    );
+    return Response.json({ success: false, error: { message: "Not found" } }, { status: 404 });
   }
 
   await prisma.project.delete({ where: { id } });

@@ -1,3 +1,4 @@
+// src/app/api/admin/profile/route.ts
 export const runtime = "nodejs";
 
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,7 @@ const schema = z.object({
   summary: z.string().optional(),
   location: z.string().optional().nullable(),
   email: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(), // ✅ add
   githubUrl: z.string().optional().nullable(),
   linkedinUrl: z.string().optional().nullable(),
   websiteUrl: z.string().optional().nullable(),
@@ -36,10 +38,7 @@ export async function PUT(request: Request) {
   try {
     const body = schema.parse(await request.json());
 
-    const profile = await prisma.profile.findFirst({
-      select: { id: true },
-    });
-
+    const profile = await prisma.profile.findFirst({ select: { id: true } });
     if (!profile) {
       return Response.json(
         { success: false, error: { message: "Profile not found" } },
@@ -56,6 +55,7 @@ export async function PUT(request: Request) {
 
         ...(body.location !== undefined ? { location: normOrNull(body.location) } : {}),
         ...(body.email !== undefined ? { email: normOrNull(body.email) } : {}),
+        ...(body.phone !== undefined ? { phone: normOrNull(body.phone) } : {}), // ✅ add
         ...(body.githubUrl !== undefined ? { githubUrl: normOrNull(body.githubUrl) } : {}),
         ...(body.linkedinUrl !== undefined ? { linkedinUrl: normOrNull(body.linkedinUrl) } : {}),
         ...(body.websiteUrl !== undefined ? { websiteUrl: normOrNull(body.websiteUrl) } : {}),
@@ -64,7 +64,6 @@ export async function PUT(request: Request) {
       },
     });
 
-    // Revalidate public pages that use header/profile
     revalidatePath("/");
     revalidatePath("/projects");
     revalidatePath("/skills");
@@ -72,10 +71,7 @@ export async function PUT(request: Request) {
     revalidatePath("/certifications");
     revalidatePath("/resume");
 
-    return Response.json({
-      success: true,
-      data: updated,
-    });
+    return Response.json({ success: true, data: updated });
   } catch (error: any) {
     console.error("PUT /api/admin/profile error:", error);
     return Response.json(

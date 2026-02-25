@@ -2,25 +2,35 @@ import type { Metadata } from "next";
 import { getBaseUrl } from "@/lib/site-url";
 
 type Props = {
-  params: { slug: string };
+  // Next.js 16: params may be a Promise
+  params: Promise<{ slug: string }>;
 };
 
 async function getProject(slug: string) {
+  if (!slug) return null;
+
   const base = getBaseUrl();
 
-  const res = await fetch(`${base}/api/public/projects/${slug}`, {
+  const res = await fetch(`${base}/api/public/projects/${encodeURIComponent(slug)}`, {
     cache: "no-store",
   });
 
-  const json = await res.json();
-  return json.data;
+  if (!res.ok) return null;
+
+  // Guard: if we got an HTML error page, res.json() would crash
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) return null;
+
+  const json = await res.json().catch(() => null);
+  return (json as any)?.data ?? null;
 }
 
 export async function generateMetadata(
   { params }: Props
 ): Promise<Metadata> {
+  const { slug } = await params;
 
-  const project = await getProject(params.slug);
+  const project = await getProject(slug);
 
   if (!project) {
     return {
@@ -40,8 +50,9 @@ export async function generateMetadata(
 }
 
 export default async function ProjectPage({ params }: Props) {
+  const { slug } = await params;
 
-  const project = await getProject(params.slug);
+  const project = await getProject(slug);
 
   if (!project) {
     return <div className="p-10">Project not found</div>;
